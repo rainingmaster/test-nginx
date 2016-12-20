@@ -1,4 +1,4 @@
-package Test::Nginx::Socket::Stream;
+package Test::Nginx::Socket::Lua::Stream;
 
 use v5.10.1;
 use Test::Nginx::Socket -Base;
