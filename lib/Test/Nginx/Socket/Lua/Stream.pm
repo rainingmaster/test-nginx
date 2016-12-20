@@ -1,7 +1,7 @@
-package Test::Nginx::Socket::Lua::Stream;
+package Test::Nginx::Socket::Stream;
 
 use v5.10.1;
-use Test::Nginx::Socket::Lua -Base;
+use Test::Nginx::Socket -Base;
 use Test::Nginx::Util qw( $ServerPort $ServerAddr );
 
 sub get_best_long_bracket_level ($);
@@ -73,163 +73,26 @@ _EOC_
         $block->set_value("main_config", $main_config);
 
         my $new_http_server_config = <<_EOC_;
-            lua_socket_log_errors off;
 
             location = /t {
-                content_by_lua_block {
-                    local sock, err = ngx.socket.tcp()
-                    assert(sock, err)
-
-                    local ok, err = sock:connect("$ServerAddr", $port)
-                    if not ok then
-                        ngx.say("connect to stream server error: ", err)
-                        return
-                    end
+                socket_get $ServerAddr $port;
 _EOC_
-
-        if (defined $stream_req) {
-            my $file = gen_data_file($stream_req);
-            $new_http_server_config .= <<_EOC_;
-                    local f = assert(io.open('$file', 'r'))
-                    local data = assert(f:read("*a"))
-                    assert(f:close())
-                    local bytes, err = sock:send(data)
-                    if not bytes then
-                        ngx.say("send stream request error: ", err)
-                        return
-                    end
-_EOC_
-        }
-
-        if (defined $block->abort) {
-            my $timeout = Test::Nginx::Util::parse_time($block->timeout)
-                          // Test::Nginx::Util::timeout();
-            $timeout *= 1000;
-            $new_http_server_config .= <<_EOC_;
-
-                    sock:settimeout($timeout)
-_EOC_
-            $block->set_value("timeout", undef);
-            $block->set_value("abort", undef);
-        }
-
-        $new_http_server_config .= <<_EOC_;
-
-                    local data, err = sock:receive("*a")
-                    if not data then
-                        sock:close()
-                        ngx.say("receive stream response error: ", err)
-                        return
-                    end
-_EOC_
-
-        if (defined $block->response_body
-            || defined $block->response_body_like
-            || defined $block->stream_response
-            || defined $block->stream_response_like)
-        {
-            if (defined $block->log_stream_response) {
-                $new_http_server_config .= <<_EOC_;
-                    print("stream response: ", data)
-                    ngx.say("received ", #data, " bytes of response data.")
-_EOC_
-            } else {
-                $new_http_server_config .= <<_EOC_;
-                    ngx.print(data)
-_EOC_
-            }
-        }
 
         if (defined $stream_server_config2) {
             my $port2 = $port + 1;
             $new_http_server_config .= <<_EOC_;
-                    local ok, err = sock:connect("$ServerAddr", $port2)
-                    if not ok then
-                        ngx.say("connect to stream server error: ", err)
-                        return
-                    end
+                socket_get $ServerAddr $port2;
 _EOC_
-
-            if (defined $stream_req2) {
-                my $file = gen_data_file($stream_req2);
-                $new_http_server_config .= <<_EOC_;
-                    local f = assert(io.open('$file', 'r'))
-                    local data = assert(f:read("*a"))
-                    assert(f:close())
-                    local bytes, err = sock:send(data)
-                    if not bytes then
-                        ngx.say("send stream request error: ", err)
-                        return
-                    end
-_EOC_
-            }
-
-            $new_http_server_config .= <<_EOC_;
-
-                        local data, err = sock:receive("*a")
-                        if not data then
-                            ngx.say("receive stream response error: ", err)
-                            return
-                        end
-_EOC_
-
-            if (defined $block->response_body
-                || defined $block->response_body_like
-                || defined $block->stream_response
-                || defined $block->stream_response_like)
-            {
-                $new_http_server_config .= <<_EOC_;
-                        ngx.print(data)
-_EOC_
-            }
         }
 
         if (defined $stream_server_config3) {
             my $port3 = $port + 2;
             $new_http_server_config .= <<_EOC_;
-                    local ok, err = sock:connect("$ServerAddr", $port3)
-                    if not ok then
-                        ngx.say("connect to stream server error: ", err)
-                        return
-                    end
+                socket_get $ServerAddr $port3;
 _EOC_
-
-            if (defined $stream_req3) {
-                my $file = gen_data_file($stream_req3);
-                $new_http_server_config .= <<_EOC_;
-                        local f = assert(io.open('$file', 'r'))
-                        local data = assert(f:read("*a"))
-                        assert(f:close())
-                        local bytes, err = sock:send(data)
-                        if not bytes then
-                            ngx.say("send stream request error: ", err)
-                            return
-                        end
-_EOC_
-            }
-
-            $new_http_server_config .= <<_EOC_;
-
-                        local data, err = sock:receive("*a")
-                        if not data then
-                            ngx.say("receive stream response error: ", err)
-                            return
-                        end
-_EOC_
-
-            if (defined $block->response_body
-                || defined $block->response_body_like
-                || defined $block->stream_response
-                || defined $block->stream_response_like
-            ) {
-                $new_http_server_config .= <<_EOC_;
-                        ngx.print(data)
-_EOC_
-            }
         }
 
         $new_http_server_config .= <<_EOC_;
-                }
             }
 _EOC_
 
